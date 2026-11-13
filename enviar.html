@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Enviando ao app · Agenda COGERA</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+/* Ponte painel → app: recebe a programação no endereço (#z=…) e entrega ao Apps Script. */
+:root{--bg:#F1F3F8;--surface:#FFFFFF;--line:#D9DDE8;--ink:#161A3A;--muted:#5B6180;--accent:#232959;--on-accent:#FFFFFF;--ok:#1D8540;--bad:#C2352B;--warn:#A5570A}
+@media (prefers-color-scheme: dark){:root{--bg:#0E1122;--surface:#161A31;--line:#2B3158;--ink:#E7E9F4;--muted:#9BA1C0;--accent:#9AA6FF;--on-accent:#0E1122;--ok:#3DBB63;--bad:#EE6B61;--warn:#F0B43A;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--ink);font:16px/1.45 "Barlow",system-ui,"Segoe UI",Roboto,Arial,sans-serif}
+.card{width:min(100%,28rem);background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--c,var(--warn));border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.card[data-s="ok"]{--c:var(--ok)}.card[data-s="err"]{--c:var(--bad)}
+.eb{margin:0;font:600 .72rem/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{margin:0;font:700 1.7rem/1.1 "Barlow Condensed","Arial Narrow",sans-serif;color:var(--c,var(--ink))}
+p{margin:0;color:var(--muted)}
+p b{color:var(--ink)}
+button{align-self:flex-start;min-height:44px;padding:0 16px;border-radius:10px;border:0;background:var(--accent);color:var(--on-accent);font:600 1rem system-ui,sans-serif;cursor:pointer}
+button:focus-visible{outline:3px solid var(--warn);outline-offset:3px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card" id="c" data-s="wait" aria-live="polite">
+  <p class="eb">Agenda COGERA · app dos técnicos</p>
+  <h1 id="t">Enviando a programação…</h1>
+  <p id="m">Não feche esta aba.</p>
+  <button type="button" id="b" hidden>Fechar esta aba</button>
+</main>
+<script>
+(function(){
+  "use strict";
+  var EXEC='https://script.google.com/macros/s/AKfycbz-QUEn2O_a42n8PYf7Nyu3o9hvVRRrDzIMb5W1gV7ah01tIhinPbwd8Bp9Mn3Ke1heCg/exec';
+  var $=function(id){return document.getElementById(id);};
+  function fim(s,t,m){var c=$('c');c.dataset.s=s;$('t').textContent=t;$('m').innerHTML=m;$('b').hidden=false;$('b').focus();}
+  $('b').addEventListener('click',function(){window.close();setTimeout(function(){$('m').textContent='Pode fechar esta aba.';},300);});
+  function dec(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';var bin=atob(s),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+  async function ler(){
+    var h=location.hash.slice(1);
+    try{history.replaceState(null,'',location.pathname);}catch(e){}
+    var m=h.match(/^([zj])=(.+)$/);if(!m)return null;
+    var u=dec(m[2]);
+    if(m[1]==='z'){var ds=new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'));return await new Response(ds).text();}
+    return new TextDecoder().decode(u);
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  (async function(){
+    var txt=null;
+    try{txt=await ler();}catch(e){}
+    if(!txt){fim('err','Nada para enviar','Abra esta página pelo botão <b>Enviar ao app</b> do Painel MS.');return;}
+    var d;try{d=JSON.parse(txt);}catch(e){fim('err','Dados incompletos','O endereço chegou cortado. Volte ao Painel MS e clique de novo em <b>Enviar ao app</b>.');return;}
+    d.at=new Date().toISOString();
+    var corpo=JSON.stringify(d),resumo=(d.itens||[]).length+' serviços para '+(d.tecs||[]).filter(function(t){return t.ativo!==false;}).length+' técnicos';
+    try{
+      var r=await fetch(EXEC,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:corpo,redirect:'follow'});
+      var j=await r.json();
+      if(j&&j.ok){fim('ok','Pronto!','<b>'+esc(resumo)+'</b> no app. Os técnicos já veem a programação nova ao abrir ou atualizar a agenda.');return;}
+      if(j&&j.erro==='chave'){fim('err','Chave não confere','A chave do painel é diferente da do Apps Script. Confira em <b>App técnicos › Configuração</b>.');return;}
+      fim('err','Não foi possível salvar','O Apps Script respondeu: '+esc(j&&j.erro||'erro desconhecido')+'. Tente de novo em instantes.');
+    }catch(e){
+      /* sem resposta legível: envia sem esperar resposta e confere depois */
+      try{
+        await fetch(EXEC,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:corpo});
+        await new Promise(function(ok){setTimeout(ok,2500);});
+        var s=await fetch(EXEC+'?api=status').then(function(x){return x.json();});
+        if(s&&s.at===d.at){fim('ok','Pronto!','<b>'+esc(resumo)+'</b> no app. Os técnicos já veem a programação nova ao abrir ou atualizar a agenda.');return;}
+        fim('wait','Enviado','A programação foi enviada, mas não deu para confirmar. Abra a agenda de um técnico para conferir.');
+      }catch(e2){
+        fim('err','Sem conexão com o Google','Confira a internet e clique de novo em <b>Enviar ao app</b> no Painel MS.');
+      }
+    }
+  })();
+})();
+</script>
+</body>
+</html>

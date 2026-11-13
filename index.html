@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agenda COGERA</title>
+<meta name="description" content="Agenda dos técnicos da equipe COGERA">
+<meta name="theme-color" content="#232959">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agenda COGERA">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+/* App da agenda: mostra a página do Apps Script (agenda do técnico) em tela cheia e lembra o código do técnico. */
+:root{
+  --bg:#F1F3F8; --surface:#FFFFFF; --surface-2:#F5F6FA; --line:#D9DDE8; --ink:#161A3A; --muted:#5B6180;
+  --accent:#232959; --on-accent:#FFFFFF; --primary:#1D8540; --amber:#A5570A; --bad:#C2352B;
+  --f-disp:"Barlow Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0E1122; --surface:#161A31; --surface-2:#1C2140; --line:#2B3158; --ink:#E7E9F4; --muted:#9BA1C0;
+  --accent:#9AA6FF; --on-accent:#0E1122; --primary:#36B566; --amber:#F0B43A; --bad:#EE6B61; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+[hidden]{display:none!important}
+#fr{flex:1;width:100%;border:0;display:block;background:var(--bg)}
+.wrap{max-width:30rem;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:16px;padding:24px 18px}
+.top{display:flex;align-items:center;gap:12px}
+.top img{width:52px;height:52px;border-radius:12px;border:1px solid var(--line);background:#fff}
+.eyebrow{margin:0;font:600 .72rem/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{margin:2px 0 0;font:700 1.9rem/1.05 var(--f-disp)}
+.card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--primary);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font:700 1.45rem/1.15 var(--f-disp)}
+.card p{margin:0;color:var(--muted)}
+label{font-weight:600;font-size:.9rem}
+input{width:100%;height:52px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);padding:0 14px;font:700 1.4rem/1 var(--f-disp);letter-spacing:.2em;text-transform:uppercase}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 18px;border-radius:12px;border:0;background:var(--accent);color:var(--on-accent);
+  font:700 1.15rem/1 var(--f-disp);letter-spacing:.06em;text-transform:uppercase;text-decoration:none;cursor:pointer}
+.btn.sec{background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-size:1rem;min-height:44px}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+.err{padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--bad) 12%,var(--surface));color:var(--bad);font-weight:600;font-size:.9rem;margin:0}
+.steps{margin:0;padding-left:1.3rem;display:grid;gap:6px}
+.steps b{color:var(--ink)}
+/* faixa de instalação (só no navegador) */
+.inst{display:flex;align-items:center;gap:10px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);font-size:.88rem}
+.inst span{flex:1;min-width:0}
+.inst button{flex:none;min-height:40px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:600 .88rem/1 var(--f-body);cursor:pointer}
+.inst button.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.dlg{position:fixed;inset:0;background:rgba(10,12,30,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px;z-index:5}
+.dlg .card{max-width:30rem;width:100%}
+.off{padding:8px 12px;background:color-mix(in srgb,var(--bad) 12%,var(--surface));color:var(--bad);font-weight:600;font-size:.88rem;text-align:center}
+</style>
+</head>
+<body>
+<p class="off" id="off" role="status" hidden>Sem internet. A agenda precisa de conexão para atualizar.</p>
+
+<!-- sem código: pede o código uma vez -->
+<div class="wrap" id="vCod" hidden>
+  <div class="top">
+    <img src="icon-192.png" alt="" width="52" height="52">
+    <div><p class="eyebrow">COGERA · equipe GMG</p><h1>Agenda do técnico</h1></div>
+  </div>
+  <form class="card" id="fCod" autocomplete="off">
+    <h2>Digite o seu código</h2>
+    <p>O programador envia um código para cada técnico. Só é preciso digitar uma vez neste aparelho.</p>
+    <p class="err" id="eCod" role="alert" hidden></p>
+    <label for="iCod">Código</label>
+    <input id="iCod" maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="EX.: K7PM2Q">
+    <button class="btn" type="submit">Abrir minha agenda</button>
+  </form>
+</div>
+
+<!-- agenda (página do Apps Script) -->
+<iframe id="fr" title="Agenda do técnico" hidden></iframe>
+
+<!-- instalar (só aparece no navegador, não no app instalado) -->
+<div class="inst" id="vInst" hidden>
+  <span>Instale a agenda no celular para abrir com um toque.</span>
+  <button type="button" class="pri" id="bInst">Instalar</button>
+  <button type="button" id="bFechar" aria-label="Agora não">Agora não</button>
+</div>
+<div class="dlg" id="vHow" hidden role="dialog" aria-modal="true" aria-labelledby="howT">
+  <div class="card">
+    <h2 id="howT">Instalar a agenda</h2>
+    <ol class="steps" id="howAndroid" hidden><li>Toque no menu <b>⋮</b> do Chrome (canto de cima).</li><li>Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li><li>Confirme. O ícone <b>Agenda COGERA</b> aparece na tela.</li></ol>
+    <ol class="steps" id="howIos" hidden><li>Abra este endereço no <b>Safari</b>.</li><li>Toque em <b>Compartilhar</b> (quadrado com seta para cima).</li><li>Toque em <b>Adicionar à Tela de Início</b> e depois em <b>Adicionar</b>.</li></ol>
+    <p id="howCod"></p>
+    <button type="button" class="btn sec" id="bOk">Entendi</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var EXEC='https://script.google.com/macros/s/AKfycbz-QUEn2O_a42n8PYf7Nyu3o9hvVRRrDzIMb5W1gV7ah01tIhinPbwd8Bp9Mn3Ke1heCg/exec';
+  var $=function(id){return document.getElementById(id);};
+  function get(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+  function put(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){}}
+  function norm(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12);}
+  var q=new URLSearchParams(location.search);
+  var cod=norm(q.get('t')||q.get('c'));
+  if(cod)put('agenda-cod',cod);else cod=norm(get('agenda-cod'));
+  var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  var ua=navigator.userAgent||'';var ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+
+  function net(){$('off').hidden=navigator.onLine!==false;}
+  window.addEventListener('online',net);window.addEventListener('offline',net);net();
+
+  function abrir(c){
+    $('vCod').hidden=true;var fr=$('fr');fr.hidden=false;
+    var u=EXEC+'?t='+encodeURIComponent(c);
+    if(fr.getAttribute('src')!==u)fr.setAttribute('src',u);
+  }
+  function pedir(msg){
+    $('fr').hidden=true;$('fr').removeAttribute('src');$('vCod').hidden=false;
+    var e=$('eCod');e.hidden=!msg;e.textContent=msg||'';
+    try{$('iCod').focus();}catch(x){}
+  }
+  $('fCod').addEventListener('submit',function(ev){
+    ev.preventDefault();var c=norm($('iCod').value);
+    if(!c){pedir('Digite o código.');return;}
+    cod=c;put('agenda-cod',c);abrir(c);
+  });
+  /* a página da agenda avisa se o código vale ou não */
+  window.addEventListener('message',function(ev){
+    var d=ev.data;if(!d||typeof d!=='object'||!d.agenda)return;
+    var h='';try{h=new URL(ev.origin).hostname;}catch(x){}
+    if(!/(^|\.)google\.com$|(^|\.)googleusercontent\.com$/.test(h)&&!window.__AGENDA_TESTE)return;
+    if(d.agenda==='ok'&&d.cod){cod=norm(d.cod);put('agenda-cod',cod);if(d.nome)put('agenda-nome',String(d.nome).slice(0,40));}
+    if(d.agenda==='codigo-invalido'){put('agenda-cod',null);cod='';pedir('O código '+norm(d.cod)+' não foi encontrado. Confira com o programador.');}
+  });
+
+  if(cod)abrir(cod);else pedir('');
+
+  /* instalar */
+  var ev=null;
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();ev=e;});
+  if(!standalone&&get('agenda-inst')!=='nao'){$('vInst').hidden=false;}
+  $('bFechar').addEventListener('click',function(){$('vInst').hidden=true;put('agenda-inst','nao');});
+  $('bInst').addEventListener('click',function(){
+    if(ev){ev.prompt();ev.userChoice.then(function(){ev=null;$('vInst').hidden=true;});return;}
+    $(ios?'howIos':'howAndroid').hidden=false;
+    $('howCod').textContent=cod?'Se o app pedir um código na primeira vez, digite: '+cod:'';
+    $('vHow').hidden=false;$('bOk').focus();
+  });
+  $('bOk').addEventListener('click',function(){$('vHow').hidden=true;});
+  window.addEventListener('appinstalled',function(){$('vInst').hidden=true;});
+  if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
+})();
+</script>
+</body>
+</html>
