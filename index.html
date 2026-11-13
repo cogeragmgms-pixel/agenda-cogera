@@ -58,6 +58,7 @@ button{cursor:pointer}
 .ttabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent)}
 .ttabs button[aria-selected="true"] b{background:var(--on-accent);color:var(--accent);border-color:transparent}
 @media (max-width:420px){.ttabs button{font-size:.92rem;letter-spacing:.02em;gap:4px;padding:10px 2px}.ttabs button b{min-width:1.15rem;height:1.15rem;padding:0 4px;font-size:.7rem}}
+.estreito .ttabs button{font-size:.92rem;letter-spacing:.02em;gap:4px;padding:10px 2px}.estreito .ttabs button b{min-width:1.15rem;height:1.15rem;padding:0 4px;font-size:.7rem}
 .tday{display:flex;flex-direction:column;gap:10px}
 .tday-h{display:flex;align-items:baseline;gap:8px;margin:6px 2px 0;font:700 1.15rem/1.1 var(--f-disp);letter-spacing:.02em}
 .tday-h small{font:600 .72rem/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--signal)}
@@ -138,6 +139,19 @@ button{cursor:pointer}
 </div>
 
 <script>
+/* Celular com o Chrome em "Site para computador": a tela vem com 980px e tudo fica miúdo. Aqui a página
+   se amplia para caber na largura real do aparelho (como se fosse a versão de celular). */
+(function(){
+  function ajusta(){
+    var de=document.documentElement,w=window.innerWidth||de.clientWidth,h=window.innerHeight||de.clientHeight;
+    var sw=screen.width||0,sh=screen.height||0,dev=w>h?Math.max(sw,sh):Math.min(sw,sh);
+    var toque=(navigator.maxTouchPoints||0)>0||('ontouchstart' in window);
+    var z=toque&&dev>0&&dev<900&&w/dev>1.25?w/dev:1;
+    de.style.zoom=z>1?String(Math.round(z*1000)/1000):'';
+    de.classList.toggle('estreito',(z>1?dev:w)<=420);
+  }
+  ajusta();window.addEventListener('resize',ajusta);window.addEventListener('orientationchange',ajusta);
+})();
 (function(){
 "use strict";
 var EXEC='https://script.google.com/macros/s/AKfycbz-QUEn2O_a42n8PYf7Nyu3o9hvVRRrDzIMb5W1gV7ah01tIhinPbwd8Bp9Mn3Ke1heCg/exec';
